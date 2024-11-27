@@ -1,0 +1,63 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.env/
+*.env
+
+# macOS system files
+.DS_Store
+
+# Logs and debug files
+*.log
+*.out
+*.err
+
+# Temporary files
+*.tmp
+*.swp
+
+# Compiled files
+*.o
+*.pyc
+
+# Editor settings
+.idea/
+*.vscode/
+
+# Environment files
+.env_ctfacile.sh
+.env
+session.json
+
+# Excluded folder for unsynced content
+.excluded/
+
+# Gum history files
+.gum/*
+
+# Local configuration files
+config.json
+
+# Python-specific
+*.egg-info/
+*.pyd
+*.pyo
+
+# Backup files
+*~
+*.bak
+
+# Test and coverage
+htmlcov/
+.tox/
+.pytest_cache/
+coverage.xml
+*.coverage
+
+# Deployment files
+*.zip
+*.tar
+*.tar.gz

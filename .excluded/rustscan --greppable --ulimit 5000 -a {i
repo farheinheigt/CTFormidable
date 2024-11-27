@@ -1,0 +1,16 @@
+rustscan --greppable --ulimit 5000 -a {ip_address}
+sudo nmap -vvv -sSCV -A --version-all -p{selected_ports} -Pn -T5 {ip_address}
+enum4linux-ng -A {ip_address} -oJ {resources_dir}_enum4linux.txt
+smbclient //{target_host}/{share_name} -U username -D SAMBA_DOWNLOAD -c 'prompt OFF; recurse ON; mget *'
+feroxbuster -w {fuzzwordlistdir} -u {url}:{port} -C 404 --auto-bail --no-state --extract-links --collect-words --collect-backups --collect-extensions -k
+echo {url}{port} | hakrawler -subs -u -dr -insecure -json > {resources_dir}result-hakrawler_{port}.json
+ffuf -u {url} -H Host:FUZZ -w {fuzzwordlistdns} -ac -c -mc all -fc 400 -or -o {resources_dir}result-vhosts.txt
+ffuf -H \"Host:FUZZ.\"{domain_name} -u {url} -w {fuzzwordlistdns} -ac -c -ic -mc all -or -o {resources_dir}result-sousdomaines.txt
+wafw00f {url}:{port} -o {resources_dir}result-wafw00f_{selected_port}.txt
+whatweb {url}:{port} --aggression 3
+nikto -h {url}:{port} -Tuning x 6 9 -ask=no
+sudo wapiti --update && sudo wapiti -u {url}:{port} --color --scope domain -m backup,brute_login_form,timesql,xxe --format txt -o {resources_dir}result-wapiti_{port}.txt
+nuclei --update && nuclei -u {url}:{port} -o {resources_dir}result-nuclei_{port}.txt
+arjun -u {url}:{port} -oT {resources_dir}result-arjun.txt
+sstimap -u {url}:{port} > {resources_dir}result-sstimap_{port}.txt
+dalfox url {url}:{port} -o {resources_dir}result-dalfox_{port}.txt
