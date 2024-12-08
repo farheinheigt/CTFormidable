@@ -142,6 +142,28 @@ def generate_prompt_for_password(http_request, http_response, prototype, usernam
         "Ne retourne aucun texte explicatif ou format Markdown."
     )
 
+def generate_prompt_for_reset_password(http_request, http_response):
+    """
+    Génère un prompt pour le bruteforce du champ email uniquement (reset_password).
+
+    Args:
+        http_request (str): Contenu brut de la requête HTTP.
+        http_response (str): Contenu brut de la réponse HTTP.
+
+    Returns:
+        str: Prompt complet pour l'IA.
+    """
+    return (
+        "On souhaite bruteforcer uniquement le champ email pour accéder à la fonctionnalité de réinitialisation du mot de passe.\n\n"
+        f"Voici les détails de la requête et de la réponse HTTP échouée :\n"
+        f"1. Requête HTTP :\n{http_request}\n\n"
+        f"2. Réponse HTTP :\n{http_response}\n\n"
+        "Identifie et retourne uniquement les champs suivants, séparés par `###` :\n"
+        "- Le nom du champ pour l'email.\n"
+        "- La chaîne indiquant l'échec d'authentification.\n\n"
+        "Retourne uniquement ces informations sous la forme : champ_email###message_derreur\n"
+        "Ne retourne aucun texte explicatif ou format Markdown."
+    )
 
 def analyze_page_with_http(prompt, verbose=False):
     """
@@ -177,7 +199,7 @@ def analyze_page_with_http(prompt, verbose=False):
             os.remove(prompt_file_path)
 
 def ask_action_with_gum():
-    choices = ["username", "password"]
+    choices = ["username", "password", "reset_password"]
     try:
         result = subprocess.run(
             ["gum", "choose"] + choices,
@@ -189,7 +211,9 @@ def ask_action_with_gum():
         return result.stdout.strip()
     except FileNotFoundError:
         console.print("[yellow]⚠️  Gum n'est pas installé. Mode non interactif activé.[/yellow]")
-        return console.input("Choisissez une action (username/password) : ").strip()
+        return console.input("Choisissez une action (username/password/reset_password) : ").strip()
+
+
 
 def gum_input_with_fallback(prompt_text, placeholder="Entrée ici"):
     """
@@ -248,13 +272,14 @@ def main():
     if args.verbose:
         console.print(f"[blue]Mode verbose activé. URL cible : {url}[/blue]")
 
-    console.print("[cyan]Sélectionnez une action (username ou password) :[/cyan]")
+    console.print("[cyan]Sélectionnez une action (username, password, reset_password) :[/cyan]")
     action = ask_action_with_gum()
 
     # Extraire le chemin exact depuis l'URL
     parsed_url = urlparse(url)
     path = parsed_url.path or "/"
 
+    username = None
     if action == "password":
         username = gum_input_with_fallback(
             prompt_text="Entrez le nom d'utilisateur fixe pour le bruteforce du mot de passe",
@@ -265,9 +290,11 @@ def main():
             sys.exit(1)
 
     prototype = (
-        f'hydra -L $DICOS/Seclists/rockyou.txt -p TEST $URL:$PORT http-post-form "{path}:£champ_username=^USER^&£champ_password=TEST:F=£message_derreur" -V'
+        f'hydra -L $(fd . $DICOS --type f | fzf) -p TEST $URL -s $PORT http-post-form "{path}:£champ_username=^USER^&£champ_password=^PASS^:F=£message_derreur" -V'
         if action == "username" else
-        f'hydra -l {username} -P $DICOS/Seclists/rockyou.txt $URL:$PORT http-form-post "{path}:£champ_username={username}&£champ_password=^PASS^:F=£message_derreur" -Vf'
+        f'hydra -l {username} -P $(fd . $DICOS --type f | fzf) $URL:$PORT http-form-post "{path}:£champ_username={username}&£champ_password=^PASS^:F=£message_derreur" -Vf'
+        if action == "password" else
+        f'hydra -l TEST%40TEST.TEST $URL:$PORT http-post-form "{path}:£champ_email=^USER^:F=£message_derreur" -V'
     )
 
     http_request, http_response = generate_http_request_and_response(url)
@@ -277,8 +304,10 @@ def main():
 
     if action == "username":
         prompt = generate_prompt_for_username(http_request, http_response, prototype)
-    else:  # action == "password"
+    elif action == "password":
         prompt = generate_prompt_for_password(http_request, http_response, prototype, username)
+    elif action == "reset_password":
+        prompt = generate_prompt_for_reset_password(http_request, http_response)
 
     if args.verbose:
         console.print(f"[yellow]Prompt généré :[/yellow]\n{prompt}")
@@ -289,26 +318,36 @@ def main():
             raise ValueError("La sortie de mods est vide.")
 
         # Extraire les valeurs retournées par mods
-        try:
-            champ_username, champ_password, message_derreur = mods_output.strip().split("###")
-        except ValueError:
-            console.print("[red]Erreur : La sortie de mods ne contient pas trois champs séparés par `###`.[/red]")
-            sys.exit(1)
+        if action == "reset_password":
+            try:
+                champ_email, message_derreur = mods_output.strip().split("###")
+            except ValueError:
+                console.print("[red]Erreur : La sortie de mods ne contient pas deux champs séparés par `###`.[/red]")
+                sys.exit(1)
 
-        # Remplacer les placeholders dans le prototype
-        hydra_command = prototype.replace("£champ_username", champ_username.strip()) \
-                                 .replace("£champ_password", champ_password.strip()) \
-                                 .replace("£message_derreur", message_derreur.strip())
+            hydra_command = prototype.replace("£champ_email", champ_email.strip()) \
+                                     .replace("£message_derreur", message_derreur.strip())
+        else:
+            try:
+                champ_username, champ_password, message_derreur = mods_output.strip().split("###")
+            except ValueError:
+                console.print("[red]Erreur : La sortie de mods ne contient pas trois champs séparés par `###`.[/red]")
+                sys.exit(1)
+
+            hydra_command = prototype.replace("£champ_username", champ_username.strip()) \
+                                     .replace("£champ_password", champ_password.strip()) \
+                                     .replace("£message_derreur", message_derreur.strip())
 
         if args.verbose:
             console.print(f"[yellow]Commande Hydra générée :[/yellow]\n{hydra_command}")
 
         console.print(f"[green]Commande Hydra générée :[/green] {hydra_command}")
-        pyperclip.copy(hydra_command)
+        clean_command = hydra_command.strip()
+        subprocess.run(["pbcopy"], input=clean_command.encode())
+        console.print(f"[green]Commande copiée dans le presse-papier :[/green] {clean_command}")
+
     except Exception as e:
         console.print(f"[red bold]Erreur :[/red bold] {e}")
-
-
 
 
 if __name__ == "__main__":
